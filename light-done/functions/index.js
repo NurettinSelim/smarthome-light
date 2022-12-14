@@ -17,8 +17,8 @@
 'use strict';
 
 const functions = require('firebase-functions');
-const { smarthome } = require('actions-on-google');
-const { google } = require('googleapis');
+const {smarthome} = require('actions-on-google');
+const {google} = require('googleapis');
 const util = require('util');
 const admin = require('firebase-admin');
 // Initialize Firebase
@@ -34,15 +34,6 @@ const homegraph = google.homegraph({
 });
 // Hardcoded user ID
 const USER_ID = '123';
-
-exports.fakeauth = functions.https.onRequest((request, response) => {
-  const responseurl = util.format('%s?code=%s&state=%s',
-    decodeURIComponent(request.query.redirect_uri), 'xxxxxx',
-    request.query.state);
-  functions.logger.log(`Set redirect as ${responseurl}`);
-  return response.redirect(
-    `/login?responseurl=${encodeURIComponent(responseurl)}`);
-});
 
 exports.login = functions.https.onRequest((request, response) => {
   if (request.method === 'GET') {
@@ -73,6 +64,15 @@ exports.login = functions.https.onRequest((request, response) => {
   }
 });
 
+exports.fakeauth = functions.https.onRequest((request, response) => {
+  const responseurl = util.format('%s?code=%s&state=%s',
+      decodeURIComponent(request.query.redirect_uri), 'xxxxxx',
+      request.query.state);
+  functions.logger.log(`Set redirect as ${responseurl}`);
+  return response.redirect(
+      `/login?responseurl=${encodeURIComponent(responseurl)}`);
+});
+
 exports.faketoken = functions.https.onRequest((request, response) => {
   const grantType = request.query.grant_type ?
     request.query.grant_type : request.body.grant_type;
@@ -96,7 +96,7 @@ exports.faketoken = functions.https.onRequest((request, response) => {
     };
   }
   response.status(HTTP_STATUS_OK)
-    .json(obj);
+      .json(obj);
 });
 
 const app = smarthome();
@@ -110,7 +110,7 @@ app.onSync((body) => {
         id: 'light',
         type: 'action.devices.types.LIGHT',
         traits: [
-          'action.devices.traits.OnOff'
+          'action.devices.traits.OnOff',
         ],
         name: {
           defaultNames: ['My Light'],
@@ -123,7 +123,7 @@ app.onSync((body) => {
           hwVersion: '1.0',
           swVersion: '1.0.1',
         },
-        willReportState: true
+        willReportState: true,
       }],
     },
   };
@@ -133,18 +133,18 @@ const queryFirebase = async (deviceId) => {
   const snapshot = await firebaseRef.child(deviceId).once('value');
   const snapshotVal = snapshot.val();
   return {
-    on: snapshotVal.OnOff.on
+    on: snapshotVal.OnOff.on,
   };
 };
 const queryDevice = async (deviceId) => {
   const data = await queryFirebase(deviceId);
   return {
-    on: data.on
+    on: data.on,
   };
 };
 
 app.onQuery(async (body) => {
-  const { requestId } = body;
+  const {requestId} = body;
   const payload = {
     devices: {},
   };
@@ -153,11 +153,11 @@ app.onQuery(async (body) => {
   for (const device of intent.payload.devices) {
     const deviceId = device.id;
     queryPromises.push(
-      queryDevice(deviceId)
-        .then((data) => {
-          // Add response to device payload
-          payload.devices[deviceId] = data;
-        }));
+        queryDevice(deviceId)
+            .then((data) => {
+              // Add response to device payload
+              payload.devices[deviceId] = data;
+            }));
   }
   // Wait for all promises to resolve
   await Promise.all(queryPromises);
@@ -168,21 +168,21 @@ app.onQuery(async (body) => {
 });
 
 const updateDevice = async (execution, deviceId) => {
-  const { params, command } = execution;
+  const {params, command} = execution;
   let state; let ref;
   switch (command) {
     case 'action.devices.commands.OnOff':
-      state = { on: params.on };
+      state = {on: params.on};
       ref = firebaseRef.child(deviceId).child('OnOff');
       break;
   }
 
   return ref.update(state)
-    .then(() => state);
+      .then(() => state);
 };
 
 app.onExecute(async (body) => {
-  const { requestId } = body;
+  const {requestId} = body;
   // Execution results are grouped by status
   const result = {
     ids: [],
@@ -198,12 +198,12 @@ app.onExecute(async (body) => {
     for (const device of command.devices) {
       for (const execution of command.execution) {
         executePromises.push(
-          updateDevice(execution, device.id)
-            .then((data) => {
-              result.ids.push(device.id);
-              Object.assign(result.states, data);
-            })
-            .catch(() => functions.logger.error('EXECUTE', device.id)));
+            updateDevice(execution, device.id)
+                .then((data) => {
+                  result.ids.push(device.id);
+                  Object.assign(result.states, data);
+                })
+                .catch(() => functions.logger.error('EXECUTE', device.id)));
       }
     }
   }
@@ -247,28 +247,28 @@ exports.requestsync = functions.https.onRequest(async (request, response) => {
  * has been changed.
  */
 exports.reportstate = functions.database.ref('{deviceId}').onWrite(
-  async (change, context) => {
-    functions.logger.info('Firebase write event triggered Report State');
-    const snapshot = change.after.val();
+    async (change, context) => {
+      functions.logger.info('Firebase write event triggered Report State');
+      const snapshot = change.after.val();
 
-    const requestBody = {
-      requestId: 'ff36a3cc', /* Any unique ID */
-      agentUserId: USER_ID,
-      payload: {
-        devices: {
-          states: {
+      const requestBody = {
+        requestId: 'ff36a3cc', /* Any unique ID */
+        agentUserId: USER_ID,
+        payload: {
+          devices: {
+            states: {
             /* Report the current state of our light */
-            [context.params.deviceId]: {
-              on: snapshot.OnOff.on
+              [context.params.deviceId]: {
+                on: snapshot.OnOff.on,
+              },
             },
           },
         },
-      },
-    };
+      };
 
-    const res = await homegraph.devices.reportStateAndNotification({
-      requestBody,
+      const res = await homegraph.devices.reportStateAndNotification({
+        requestBody,
+      });
+      functions.logger.info('Report state response:', res.status, res.data);
     });
-    functions.logger.info('Report state response:', res.status, res.data);
-  });
 
